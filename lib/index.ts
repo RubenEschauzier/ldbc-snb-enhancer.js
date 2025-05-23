@@ -18,3 +18,4 @@ export * from './selector/DataSelectorRandom';
 export * from './selector/IDataSelector';
 export * from './CliRunner';
 export * from './Enhancer';
+export * from './EnhancerSimilarity';

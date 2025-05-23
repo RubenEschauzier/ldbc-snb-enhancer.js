@@ -56,3 +56,47 @@ export interface IEnhancementContext {
    */
   classes: RDF.NamedNode[];
 }
+
+
+
+/**
+ * Holds background knowledge of the dataset to enhance.
+ */
+export interface IEnhancementContextSimilarity {
+  /**
+   * Object loader utility.
+   */
+  rdfObjectLoader: RdfObjectLoader;
+  /**
+   * Utility for selecting data.
+   */
+  dataSelector: IDataSelector;
+  /**
+   * An array of IRIs of all people in the dataset.
+   */
+  people: RDF.NamedNode[];
+  /**
+   * An array of IRIs of all interests in the dataset.
+   */
+  interests: RDF.NamedNode[];
+  /**
+   * An array of IRIs of all universities in the dataset.
+   */
+  universities: RDF.NamedNode[];
+  /**
+   * A mapping of people to interests.
+   */
+  peopleHasInterest: Record<string, RDF.NamedNode[]>;
+  /**
+   * A mapping of people to universities they studied at.
+   */
+  peopleStudyAt: Record<string, RDF.NamedNode[]>;
+  /**
+   * An array of all predicates.
+   */
+  predicates: RDF.NamedNode[];
+  /**
+   * An array of all classes.
+   */
+  classes: RDF.NamedNode[];
+}
