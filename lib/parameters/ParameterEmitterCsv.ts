@@ -8,12 +8,13 @@ import type { IParameterEmitter } from './IParameterEmitter';
 export class ParameterEmitterCsv implements IParameterEmitter {
   private readonly destinationPath: string;
   private readonly fileStream: WriteStream;
+  private readonly separator: string;
 
   private headerLength = -1;
 
-  public constructor(destinationPath: string) {
+  public constructor(destinationPath: string, separator: string = ',') {
     this.destinationPath = destinationPath;
-
+    this.separator = separator
     this.fileStream = fs.createWriteStream(this.destinationPath);
   }
 
@@ -34,21 +35,20 @@ export class ParameterEmitterCsv implements IParameterEmitter {
       throw new Error(`A column of length ${columns.length} was emitted, while length ${this.headerLength} is required.`);
     }
 
-    return this.fileStream.write(`${columns.join(',')}\n`);
+    return this.fileStream.write(`${columns.join(this.separator)}\n`);
   }
 
-  public async waitForDrain(writeResult: boolean): Promise<void>{
+  public async waitForDrain(writeResult: boolean): Promise<void> {
     if (writeResult) {
-        return Promise.resolve();
+      return;
     }
     // Wait for 'drain' event to resume writing
     return new Promise((resolve) => {
-        this.fileStream.once('drain', () => resolve());
+      this.fileStream.once('drain', () => resolve());
     });
   }
 
   public flush(): void {
     this.fileStream.end();
   }
-
 }

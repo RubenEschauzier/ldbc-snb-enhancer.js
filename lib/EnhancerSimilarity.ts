@@ -12,6 +12,7 @@ import type { IEnhancementHandlerSimilarity } from './handlers/IEnhancementHandl
 import type { ILogger } from './logging/ILogger';
 import type { IParameterEmitter } from './parameters/IParameterEmitter';
 import type { IDataSelector } from './selector/IDataSelector';
+import { TransformerReplaceIri } from './transformers/TransformerReplaceIri';
 
 const DF = new DataFactory();
 
@@ -35,7 +36,7 @@ export class EnhancerSimilarity {
   private readonly parameterEmitterPosts?: IParameterEmitter;
   private readonly parameterEmitterComments?: IParameterEmitter;
   private readonly maxSimilarities: number = 200;
-
+  private readonly personTransformer?: TransformerReplaceIri;
   private readonly rdfObjectLoader: RdfObjectLoader;
 
   public constructor(options: IEnhancerSimilarityOptions) {
@@ -57,6 +58,7 @@ export class EnhancerSimilarity {
     if (options.maxSimilarities){
         this.maxSimilarities = options.maxSimilarities;
     }
+    this.personTransformer = options.personTransformer;
 
     this.rdfObjectLoader = new RdfObjectLoader({ context: EnhancerSimilarity.CONTEXT_LDBC_SNB });
 
@@ -352,74 +354,67 @@ export class EnhancerSimilarity {
         const persons = Object.keys(peopleSemanticVectors);
         let i = 0;
         for (const person of persons) {
+            // Transform the person IRI if a transformer is provided
+            let personTransformed = person;
+            if (this.personTransformer){
+              personTransformed = this.personTransformer.transformTerm(person);
+            }
             if (i % 10 === 0){
               process.stdout.write(`\rSimilarities calculated: ${i}`);
             }
-            const similaritiesPeople = [];
-            const similaritiesPosts = [];
-            const similaritiesComments = [];
-            // personSimilarities[person] = [];
+            const similaritiesPeople: IEntitySimilarity[] = [];
+            const similaritiesPosts: IEntitySimilarity[] = [];
+            const similaritiesComments: IEntitySimilarity[] = [];
             for (const pair of persons) {
-                if (person !== pair) {
-                    const similarityPerson = this.cosineSimilarity(
-                      peopleSemanticVectors[person], peopleSemanticVectors[pair]
-                    );
-                    similaritiesPeople.push(
-                        {
-                          [pair]: similarityPerson
-                        }
-                    );
-                    // Some people have no posts
-                    if (personToPost[pair]){
-                      for (const post of personToPost[pair]){
-                        similaritiesPosts.push(
-                          {
-                            [post]: similarityPerson
-                          }
-                        )
+              let pairTransformed = pair;
+              if (this.personTransformer){
+                pairTransformed = this.personTransformer.transformTerm(pair);
+              }
+              if (personTransformed !== pairTransformed) {
+                  const similarityPerson = this.cosineSimilarity(
+                    peopleSemanticVectors[person], peopleSemanticVectors[pair]
+                  );
+                  similaritiesPeople.push(
+                      {
+                        entity: pairTransformed, similarity: similarityPerson
                       }
+                  );
+                  // Some people have no posts
+                  if (personToPost[pair]){
+                    for (const post of personToPost[pair]){
+                      similaritiesPosts.push(
+                        {entity: post, similarity: similarityPerson}
+                      )
                     }
-                    if (personToComment[pair]){
-                      for (const comment of personToComment[pair]){
-                        similaritiesComments.push(
-                          {
-                            [comment]: similarityPerson
-                          }
-                        )
-                      }
+                  }
+                  if (personToComment[pair]){
+                    for (const comment of personToComment[pair]){
+                      similaritiesComments.push(
+                        {entity: comment, similarity: similarityPerson}
+                      )
                     }
-                }
+                  }
+              }
             }
-            // const similaritiesAsArray = similaritiesPeople.map(x=>Object.entries(x));
-            // // Sort in descending order in terms of similarities
-            // similaritiesAsArray.sort((a,b) => b[0][1] - a[0][1]);
-            // // Ensure a maximum number of similarities is stored, as storage is N^2 with
-            // // N the number of entities.
-            // similaritiesAsArray.slice(0, this.maxSimilarities);
-            // const similaritiesSorted = similaritiesAsArray.map(x => Object.fromEntries(x));
-            // // Write to file in streaming manner to avoid OOM issues with large datasets
             const similaritiesPeopleSorted = this.sortAndTruncateSimilarities(similaritiesPeople)
             const similaritiesPostsSorted = this.sortAndTruncateSimilarities(similaritiesPosts)
             const similaritiesCommentsSorted = this.sortAndTruncateSimilarities(similaritiesComments)
 
             await this.parameterEmitterSimilaritiesPeople.waitForDrain(
-              this.parameterEmitterSimilaritiesPeople.emitRow([person, JSON.stringify(similaritiesPeopleSorted)])
+              this.parameterEmitterSimilaritiesPeople.emitRow([personTransformed, JSON.stringify(similaritiesPeopleSorted)])
             );
             await this.parameterEmitterSimilaritiesPosts.waitForDrain(
-              this.parameterEmitterSimilaritiesPosts.emitRow([person, JSON.stringify(similaritiesPostsSorted)])
+              this.parameterEmitterSimilaritiesPosts.emitRow([personTransformed, JSON.stringify(similaritiesPostsSorted)])
             );
             await this.parameterEmitterSimilaritiesComments.waitForDrain(
-              this.parameterEmitterSimilaritiesComments.emitRow([person, JSON.stringify(similaritiesCommentsSorted)])
+              this.parameterEmitterSimilaritiesComments.emitRow([personTransformed, JSON.stringify(similaritiesCommentsSorted)])
             );
             i++;
         }
-        process.stdout.write('\n');
         this.parameterEmitterSimilaritiesPeople.flush();
         this.parameterEmitterSimilaritiesPosts.flush();
         this.parameterEmitterSimilaritiesComments.flush();
-
   }
-
 
   public cosineSimilarity(a: number[], b: number[]): number {
       const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
@@ -428,15 +423,13 @@ export class EnhancerSimilarity {
     return dot / (normA * normB);
   }
 
-  public sortAndTruncateSimilarities(similarityArray: Record<string, number>[]){
-    const similaritiesAsArray = similarityArray.map(x=>Object.entries(x));
+  public sortAndTruncateSimilarities(similarityArray: IEntitySimilarity[]){
     // Sort in descending order in terms of similarities
-    similaritiesAsArray.sort((a,b) => b[0][1] - a[0][1]);
+    similarityArray.sort((a,b) => b.similarity- a.similarity);
     // Ensure a maximum number of similarities is stored, as storage is N^2 with
     // N the number of entities.
-    const slicedSimilarities = similaritiesAsArray.slice(0, this.maxSimilarities);
-    const similaritiesSorted = slicedSimilarities.map(x => Object.fromEntries(x));
-    return similaritiesSorted
+    const similarityArrayTruncated = similarityArray.slice(0, this.maxSimilarities);
+    return similarityArrayTruncated
   }
 }
 
@@ -491,4 +484,13 @@ export interface IEnhancerSimilarityOptions {
    * This will safe the highest similarities
    */
   maxSimilarities?: number;
+  /**
+   * Transformer to replace IRIs in for all people.
+   */
+  personTransformer?: TransformerReplaceIri; 
+}
+
+export interface IEntitySimilarity{
+  entity: string;
+  similarity: number;
 }

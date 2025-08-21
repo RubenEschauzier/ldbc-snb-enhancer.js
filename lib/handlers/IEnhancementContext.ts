@@ -57,8 +57,6 @@ export interface IEnhancementContext {
   classes: RDF.NamedNode[];
 }
 
-
-
 /**
  * Holds background knowledge of the dataset to enhance.
  */
