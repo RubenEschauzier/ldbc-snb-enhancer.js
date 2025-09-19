@@ -12,7 +12,7 @@ import type { IEnhancementHandlerSimilarity } from './handlers/IEnhancementHandl
 import type { ILogger } from './logging/ILogger';
 import type { IParameterEmitter } from './parameters/IParameterEmitter';
 import type { IDataSelector } from './selector/IDataSelector';
-import { TransformerReplaceIri } from './transformers/TransformerReplaceIri';
+import type { TransformerReplaceIri } from './transformers/TransformerReplaceIri';
 
 const DF = new DataFactory();
 
@@ -54,9 +54,8 @@ export class EnhancerSimilarity {
     this.parameterEmitterSimilaritiesPosts = options.parameterEmitterSimilaritiesPosts;
     this.parameterEmitterSimilaritiesComments = options.parameterEmitterSimilaritiesComments;
 
-
-    if (options.maxSimilarities){
-        this.maxSimilarities = options.maxSimilarities;
+    if (options.maxSimilarities) {
+      this.maxSimilarities = options.maxSimilarities;
     }
     this.personTransformer = options.personTransformer;
 
@@ -64,10 +63,9 @@ export class EnhancerSimilarity {
 
     this.parameterEmitterPosts?.emitHeader([ 'post' ]);
     this.parameterEmitterComments?.emitHeader([ 'comment' ]);
-    this.parameterEmitterSimilaritiesPeople.emitHeader(['person', 'similarities']);
-    this.parameterEmitterSimilaritiesPosts.emitHeader(['person', 'similarities']);
-    this.parameterEmitterSimilaritiesComments.emitHeader(['person', 'similarities']);
-
+    this.parameterEmitterSimilaritiesPeople.emitHeader([ 'person', 'similarities' ]);
+    this.parameterEmitterSimilaritiesPosts.emitHeader([ 'person', 'similarities' ]);
+    this.parameterEmitterSimilaritiesComments.emitHeader([ 'person', 'similarities' ]);
   }
 
   /**
@@ -85,12 +83,12 @@ export class EnhancerSimilarity {
     rdfSerializer.serialize(writeStream, { contentType: 'text/turtle' }).pipe(fileStream);
 
     this.logger?.log('Reading background data: activities');
-    const { 
-      posts, 
-      postsCreator, 
-      comments, 
-      commentsCreator, 
-      activityClasses 
+    const {
+      posts,
+      postsCreator,
+      comments,
+      commentsCreator,
+      activityClasses,
     } = await this.extractActivities();
     const personToPost = this.personToActivities(postsCreator);
     const personToComment = this.personToActivities(commentsCreator);
@@ -108,7 +106,10 @@ export class EnhancerSimilarity {
     } = await this.extractPeopleInterests();
 
     const peopleSemanticVectors = this.interestsToVector(
-        peopleHasInterest, peopleStudyAt, interests, universities
+      peopleHasInterest,
+      peopleStudyAt,
+      interests,
+      universities,
     );
     await this.peopleSimilarities(peopleSemanticVectors, personToPost, personToComment);
 
@@ -172,23 +173,21 @@ export class EnhancerSimilarity {
         // Extract people
         if (quad.subject.termType === 'NamedNode' &&
           quad.predicate.equals(termType) &&
-          quad.object.equals(termPerson)) 
-        {
+          quad.object.equals(termPerson)) {
           people.push(quad.subject);
         }
 
         // Extract interests of people
-        if (quad.subject.termType === 'NamedNode' && 
+        if (quad.subject.termType === 'NamedNode' &&
             quad.object.termType === 'NamedNode' &&
-            quad.predicate.equals(termHasInterest) 
+            quad.predicate.equals(termHasInterest)
         ) {
-            interests.push(quad.object);
-            if (!peopleHasInterest[quad.subject.value]){
-                peopleHasInterest[quad.subject.value] = []
-            }
-            peopleHasInterest[quad.subject.value].push(quad.object)
+          interests.push(quad.object);
+          if (!peopleHasInterest[quad.subject.value]) {
+            peopleHasInterest[quad.subject.value] = [];
+          }
+          peopleHasInterest[quad.subject.value].push(quad.object);
         }
-
 
         // Extract people studyAt relationships
         // 1. Determine reified blank node identifying the relationships
@@ -235,80 +234,78 @@ export class EnhancerSimilarity {
     });
   }
 
-    public extractActivities(): Promise<{
+  public extractActivities(): Promise<{
+    posts: RDF.NamedNode[];
+    postsCreator: Record<string, RDF.Term[]>;
+    comments: RDF.NamedNode[];
+    commentsCreator: Record<string, RDF.Term[]>;
+    activityClasses: RDF.NamedNode[];
+  }> {
+    return new Promise<{
       posts: RDF.NamedNode[];
       postsCreator: Record<string, RDF.Term[]>;
       comments: RDF.NamedNode[];
       commentsCreator: Record<string, RDF.Term[]>;
       activityClasses: RDF.NamedNode[];
-    }> {
-      return new Promise<{
-        posts: RDF.NamedNode[];
-        postsCreator: Record<string, RDF.Term[]>;
-        comments: RDF.NamedNode[];
-        commentsCreator: Record<string, RDF.Term[]>;
-        activityClasses: RDF.NamedNode[];
-      }>((resolve, reject) => {
-        // Prepare RDF terms to compare with
-        const termType = this.rdfObjectLoader.createCompactedResource('rdf:type').term;
-        const termPost = this.rdfObjectLoader.createCompactedResource('snvoc:Post').term;
-        const termComment = this.rdfObjectLoader.createCompactedResource('snvoc:Comment').term;
-        const termHasCreator = this.rdfObjectLoader.createCompactedResource('snvoc:hasCreator').term;
-  
-        const posts: RDF.NamedNode[] = [];
-        const postsCreator: Record<string, RDF.Term[]> = {};
-        const comments: RDF.NamedNode[] = [];
-        const commentsCreator: Record<string, RDF.Term[]> = {};
-        const stream = rdfParser.parse(fs.createReadStream(this.activitiesPath), { path: this.activitiesPath });
-        stream.on('error', reject);
-        stream.on('data', (quad: RDF.Quad) => {
-          if (quad.subject.termType === 'NamedNode' &&
+    }>((resolve, reject) => {
+      // Prepare RDF terms to compare with
+      const termType = this.rdfObjectLoader.createCompactedResource('rdf:type').term;
+      const termPost = this.rdfObjectLoader.createCompactedResource('snvoc:Post').term;
+      const termComment = this.rdfObjectLoader.createCompactedResource('snvoc:Comment').term;
+      const termHasCreator = this.rdfObjectLoader.createCompactedResource('snvoc:hasCreator').term;
+
+      const posts: RDF.NamedNode[] = [];
+      const postsCreator: Record<string, RDF.Term[]> = {};
+      const comments: RDF.NamedNode[] = [];
+      const commentsCreator: Record<string, RDF.Term[]> = {};
+      const stream = rdfParser.parse(fs.createReadStream(this.activitiesPath), { path: this.activitiesPath });
+      stream.on('error', reject);
+      stream.on('data', (quad: RDF.Quad) => {
+        if (quad.subject.termType === 'NamedNode' &&
             quad.predicate.equals(termType)) {
-            if (quad.object.equals(termPost)) {
-              posts.push(quad.subject);
-              // Emit parameters
-              this.parameterEmitterPosts?.emitRow([ quad.subject.value ]);
-              postsCreator[quad.subject.value] = [];
-            }
-            if (quad.object.equals(termComment)) {
-              comments.push(quad.subject);
-              commentsCreator[quad.subject.value] = [];
-              this.parameterEmitterComments?.emitRow([ quad.subject.value ]);
-            }
+          if (quad.object.equals(termPost)) {
+            posts.push(quad.subject);
+            // Emit parameters
+            this.parameterEmitterPosts?.emitRow([ quad.subject.value ]);
+            postsCreator[quad.subject.value] = [];
           }
-          if (quad.subject.termType === 'NamedNode' && quad.predicate.equals(termHasCreator)) {
-            const postDetails = postsCreator[quad.subject.value];
-            const commentDetails = commentsCreator[quad.subject.value];
-            if (postDetails) {
-              postDetails.push(quad.object);
-            }
-            else{
-              commentDetails.push(quad.object);
-            } 
+          if (quad.object.equals(termComment)) {
+            comments.push(quad.subject);
+            commentsCreator[quad.subject.value] = [];
+            this.parameterEmitterComments?.emitRow([ quad.subject.value ]);
           }
-        });
-        stream.on('end', () => {
-          this.parameterEmitterPosts?.flush();
-          this.parameterEmitterComments?.flush();
-          resolve({
-            posts,
-            postsCreator,
-            comments,
-            commentsCreator,
-            activityClasses: [ DF.namedNode(termPost.value), DF.namedNode(termComment.value) ],
-          });
+        }
+        if (quad.subject.termType === 'NamedNode' && quad.predicate.equals(termHasCreator)) {
+          const postDetails = postsCreator[quad.subject.value];
+          const commentDetails = commentsCreator[quad.subject.value];
+          if (postDetails) {
+            postDetails.push(quad.object);
+          } else {
+            commentDetails.push(quad.object);
+          }
+        }
+      });
+      stream.on('end', () => {
+        this.parameterEmitterPosts?.flush();
+        this.parameterEmitterComments?.flush();
+        resolve({
+          posts,
+          postsCreator,
+          comments,
+          commentsCreator,
+          activityClasses: [ DF.namedNode(termPost.value), DF.namedNode(termComment.value) ],
         });
       });
+    });
   }
 
-
-  public personToActivities(activityToPerson: Record<string, RDF.Term[]>){
+  public personToActivities(activityToPerson: Record<string, RDF.Term[]>): Record<string, string[]> {
     const personToActivity: Record<string, string[]> = {};
-    for (const activity of Object.keys(activityToPerson)){
+    for (const activity of Object.keys(activityToPerson)) {
       // The first value is always the creator of the activity, could
       // probably do with removing the array and just setting directly.
       const person = activityToPerson[activity][0].value;
-      if (!personToActivity[person]){
+      if (!personToActivity[person]) {
         personToActivity[person] = [];
       }
       personToActivity[person].push(activity);
@@ -318,118 +315,128 @@ export class EnhancerSimilarity {
 
   /**
    * Encode interests and university of a person to a semantic one-hot encoded vector
-   * @param peopleHasInterest 
-   * @param peopleStudyAt 
-   * @param interests 
-   * @param universities 
-   * @returns 
+   * @param peopleHasInterest
+   * @param peopleStudyAt
+   * @param interests
+   * @param universities
+   * @returns
    */
-  public interestsToVector(peopleHasInterest: Record<string, RDF.NamedNode[]>, 
-    peopleStudyAt: Record<string, RDF.NamedNode[]>, 
-    interests: RDF.NamedNode[], universities: RDF.NamedNode[])
-  {
-    const indexMapInterests: Record<string, number> = Object.fromEntries(interests.map((s, i) => [s.value, i]));
-    const indexMapUniversities: Record<string, number> = Object.fromEntries(universities.map((s, i) => [s.value, i]));
+  public interestsToVector(
+    peopleHasInterest: Record<string, RDF.NamedNode[]>,
+    peopleStudyAt: Record<string, RDF.NamedNode[]>,
+    interests: RDF.NamedNode[],
+    universities: RDF.NamedNode[],
+  ): Record<string, number[]> {
+    const indexMapInterests: Record<string, number> = Object.fromEntries(interests.map((s, i) => [ s.value, i ]));
+    const indexMapUniversities: Record<string, number> = Object.fromEntries(universities.map((s, i) => [ s.value, i ]));
 
     const peopleSemanticVectors: Record<string, number[]> = {};
     for (const person of Object.keys(peopleHasInterest)) {
-        const semanticVector = Array(interests.length+universities.length).fill(0)
-        // First n elements semantic vector represent person's interests
-        peopleHasInterest[person].forEach(interest => semanticVector[indexMapInterests[interest.value]] = 1);
-        // Second m elements semantic vector represent university person studied at
-        if (peopleStudyAt[person]){
-            
-            peopleStudyAt[person].forEach(
-                university => semanticVector[indexMapUniversities[university.value] + interests.length] = 1
-            )
+      const semanticVector = <number[]> Array.from({ length: interests.length + universities.length }).fill(0);
+      // First n elements semantic vector represent person's interests
+      for (const interest of peopleHasInterest[person]) {
+        semanticVector[indexMapInterests[interest.value]] = 1;
+      }
+      // Second m elements semantic vector represent university person studied at
+      if (peopleStudyAt[person]) {
+        for (const university of peopleStudyAt[person]) {
+          semanticVector[indexMapUniversities[university.value] + interests.length] = 1;
         }
-        peopleSemanticVectors[person] = semanticVector;
+      }
+      peopleSemanticVectors[person] = semanticVector;
     }
-    return peopleSemanticVectors
+    return peopleSemanticVectors;
   }
 
-  public async peopleSimilarities(peopleSemanticVectors: Record<string, number[]>,
-    personToPost: Record<string, string[]>, personToComment: Record<string, string[]>
-  ){
-        const persons = Object.keys(peopleSemanticVectors);
-        let i = 0;
-        for (const person of persons) {
-            // Transform the person IRI if a transformer is provided
-            let personTransformed = person;
-            if (this.personTransformer){
-              personTransformed = this.personTransformer.transformTerm(person);
-            }
-            if (i % 10 === 0){
-              process.stdout.write(`\rSimilarities calculated: ${i}`);
-            }
-            const similaritiesPeople: IEntitySimilarity[] = [];
-            const similaritiesPosts: IEntitySimilarity[] = [];
-            const similaritiesComments: IEntitySimilarity[] = [];
-            for (const pair of persons) {
-              let pairTransformed = pair;
-              if (this.personTransformer){
-                pairTransformed = this.personTransformer.transformTerm(pair);
-              }
-              if (personTransformed !== pairTransformed) {
-                  const similarityPerson = this.cosineSimilarity(
-                    peopleSemanticVectors[person], peopleSemanticVectors[pair]
-                  );
-                  similaritiesPeople.push(
-                      {
-                        entity: pairTransformed, similarity: similarityPerson
-                      }
-                  );
-                  // Some people have no posts
-                  if (personToPost[pair]){
-                    for (const post of personToPost[pair]){
-                      similaritiesPosts.push(
-                        {entity: post, similarity: similarityPerson}
-                      )
-                    }
-                  }
-                  if (personToComment[pair]){
-                    for (const comment of personToComment[pair]){
-                      similaritiesComments.push(
-                        {entity: comment, similarity: similarityPerson}
-                      )
-                    }
-                  }
-              }
-            }
-            const similaritiesPeopleSorted = this.sortAndTruncateSimilarities(similaritiesPeople)
-            const similaritiesPostsSorted = this.sortAndTruncateSimilarities(similaritiesPosts)
-            const similaritiesCommentsSorted = this.sortAndTruncateSimilarities(similaritiesComments)
-
-            await this.parameterEmitterSimilaritiesPeople.waitForDrain(
-              this.parameterEmitterSimilaritiesPeople.emitRow([personTransformed, JSON.stringify(similaritiesPeopleSorted)])
-            );
-            await this.parameterEmitterSimilaritiesPosts.waitForDrain(
-              this.parameterEmitterSimilaritiesPosts.emitRow([personTransformed, JSON.stringify(similaritiesPostsSorted)])
-            );
-            await this.parameterEmitterSimilaritiesComments.waitForDrain(
-              this.parameterEmitterSimilaritiesComments.emitRow([personTransformed, JSON.stringify(similaritiesCommentsSorted)])
-            );
-            i++;
+  public async peopleSimilarities(
+    peopleSemanticVectors: Record<string, number[]>,
+    personToPost: Record<string, string[]>,
+    personToComment: Record<string, string[]>,
+  ): Promise<void> {
+    const persons = Object.keys(peopleSemanticVectors);
+    let i = 0;
+    for (const person of persons) {
+      // Transform the person IRI if a transformer is provided
+      let personTransformed = person;
+      if (this.personTransformer) {
+        personTransformed = this.personTransformer.transformTerm(person);
+      }
+      if (i % 10 === 0) {
+        process.stdout.write(`\rSimilarities calculated: ${i}`);
+      }
+      const similaritiesPeople: IEntitySimilarity[] = [];
+      const similaritiesPosts: IEntitySimilarity[] = [];
+      const similaritiesComments: IEntitySimilarity[] = [];
+      for (const pair of persons) {
+        let pairTransformed = pair;
+        if (this.personTransformer) {
+          pairTransformed = this.personTransformer.transformTerm(pair);
         }
-        this.parameterEmitterSimilaritiesPeople.flush();
-        this.parameterEmitterSimilaritiesPosts.flush();
-        this.parameterEmitterSimilaritiesComments.flush();
+        if (personTransformed !== pairTransformed) {
+          const similarityPerson = this.cosineSimilarity(
+            peopleSemanticVectors[person],
+            peopleSemanticVectors[pair],
+          );
+          similaritiesPeople.push(
+            {
+              entity: pairTransformed,
+              similarity: similarityPerson,
+            },
+          );
+          // Some people have no posts
+          if (personToPost[pair]) {
+            for (const post of personToPost[pair]) {
+              similaritiesPosts.push(
+                { entity: post, similarity: similarityPerson },
+              );
+            }
+          }
+          if (personToComment[pair]) {
+            for (const comment of personToComment[pair]) {
+              similaritiesComments.push(
+                { entity: comment, similarity: similarityPerson },
+              );
+            }
+          }
+        }
+      }
+      const similaritiesPeopleSorted = this.sortAndTruncateSimilarities(similaritiesPeople);
+      const similaritiesPostsSorted = this.sortAndTruncateSimilarities(similaritiesPosts);
+      const similaritiesCommentsSorted = this.sortAndTruncateSimilarities(similaritiesComments);
+
+      await this.parameterEmitterSimilaritiesPeople.waitForDrain(
+        this.parameterEmitterSimilaritiesPeople.emitRow(
+          [ personTransformed, JSON.stringify(similaritiesPeopleSorted) ],
+        ),
+      );
+      await this.parameterEmitterSimilaritiesPosts.waitForDrain(
+        this.parameterEmitterSimilaritiesPosts.emitRow([ personTransformed, JSON.stringify(similaritiesPostsSorted) ]),
+      );
+      await this.parameterEmitterSimilaritiesComments.waitForDrain(
+        this.parameterEmitterSimilaritiesComments.emitRow(
+          [ personTransformed, JSON.stringify(similaritiesCommentsSorted) ],
+        ),
+      );
+      i++;
+    }
+    this.parameterEmitterSimilaritiesPeople.flush();
+    this.parameterEmitterSimilaritiesPosts.flush();
+    this.parameterEmitterSimilaritiesComments.flush();
   }
 
   public cosineSimilarity(a: number[], b: number[]): number {
-      const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-      const normA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
-      const normB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
+    const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
+    const normA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
+    const normB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
     return dot / (normA * normB);
   }
 
-  public sortAndTruncateSimilarities(similarityArray: IEntitySimilarity[]){
+  public sortAndTruncateSimilarities(similarityArray: IEntitySimilarity[]): IEntitySimilarity[] {
     // Sort in descending order in terms of similarities
-    similarityArray.sort((a,b) => b.similarity- a.similarity);
+    similarityArray.sort((a, b) => b.similarity - a.similarity);
     // Ensure a maximum number of similarities is stored, as storage is N^2 with
     // N the number of entities.
-    const similarityArrayTruncated = similarityArray.slice(0, this.maxSimilarities);
-    return similarityArrayTruncated
+    return similarityArray.slice(0, this.maxSimilarities);
   }
 }
 
@@ -487,10 +494,10 @@ export interface IEnhancerSimilarityOptions {
   /**
    * Transformer to replace IRIs in for all people.
    */
-  personTransformer?: TransformerReplaceIri; 
+  personTransformer?: TransformerReplaceIri;
 }
 
-export interface IEntitySimilarity{
+export interface IEntitySimilarity {
   entity: string;
   similarity: number;
 }

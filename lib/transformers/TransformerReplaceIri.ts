@@ -10,7 +10,7 @@ export class TransformerReplaceIri {
   private readonly replacement: string;
 
   public constructor(searchRegex: string, replacementString: string) {
-    console.log("New")
+    console.log('New');
     this.search = new RegExp(searchRegex, 'u');
     this.replacement = replacementString;
   }

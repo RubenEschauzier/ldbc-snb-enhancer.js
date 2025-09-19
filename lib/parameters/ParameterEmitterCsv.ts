@@ -12,9 +12,9 @@ export class ParameterEmitterCsv implements IParameterEmitter {
 
   private headerLength = -1;
 
-  public constructor(destinationPath: string, separator: string = ',') {
+  public constructor(destinationPath: string, separator = ',') {
     this.destinationPath = destinationPath;
-    this.separator = separator
+    this.separator = separator;
     this.fileStream = fs.createWriteStream(this.destinationPath);
   }
 
