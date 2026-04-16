@@ -2,6 +2,7 @@ import { ParameterEmitterCsv } from '../../lib/parameters/ParameterEmitterCsv';
 
 const writeStream = {
   write: jest.fn(),
+  once: jest.fn(),
   end: jest.fn(),
 };
 jest.mock('node:fs', () => ({
@@ -59,6 +60,21 @@ describe('ParameterEmitterCsv', () => {
     it('to end the stream', () => {
       emitter.flush();
       expect(writeStream.end).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('waitForDrain', () => {
+    it('should return immediately when write succeeds', async() => {
+      await expect(emitter.waitForDrain(true)).resolves.toBeUndefined();
+      expect(writeStream.once).not.toHaveBeenCalled();
+    });
+
+    it('should wait for drain when write fails', async() => {
+      writeStream.once.mockImplementation((_event: string, callback: () => void) => {
+        callback();
+      });
+      await expect(emitter.waitForDrain(false)).resolves.toBeUndefined();
+      expect(writeStream.once).toHaveBeenCalledWith('drain', expect.any(Function));
     });
   });
 });

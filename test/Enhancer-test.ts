@@ -402,11 +402,13 @@ sn:bla rdf:type snvoc:other .`;
       emitterPosts = {
         emitHeader: jest.fn(),
         emitRow: jest.fn(),
+        waitForDrain: jest.fn(),
         flush: jest.fn(),
       };
       emitterComments = {
         emitHeader: jest.fn(),
         emitRow: jest.fn(),
+        waitForDrain: jest.fn(),
         flush: jest.fn(),
       };
       enhancer = new Enhancer({
