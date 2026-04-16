@@ -466,7 +466,6 @@ export interface IEnhancerSimilarityOptions {
    * Parameter emitter that emits the calculated similarities for comments
    */
   parameterEmitterSimilaritiesComments: IParameterEmitter;
-
   /**
    * Enhancement handlers.
    */
