@@ -84,11 +84,8 @@ export class EnhancerSimilarity {
 
     this.logger?.log('Reading background data: activities');
     const {
-      posts,
       postsCreator,
-      comments,
       commentsCreator,
-      activityClasses,
     } = await this.extractActivities();
     const personToPost = this.personToActivities(postsCreator);
     const personToComment = this.personToActivities(commentsCreator);
@@ -319,7 +316,7 @@ export class EnhancerSimilarity {
    * @param peopleStudyAt
    * @param interests
    * @param universities
-   * @returns
+   * @returns Record mapping person to vector representing their interests
    */
   public interestsToVector(
     peopleHasInterest: Record<string, RDF.NamedNode[]>,
