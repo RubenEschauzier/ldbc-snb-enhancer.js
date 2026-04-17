@@ -186,15 +186,16 @@ export class EnhancerSimilarity {
           peopleHasInterest[quad.subject.value].push(quad.object);
         }
 
-        // Extract people studyAt relationships
-        // 1. Determine reified blank node identifying the relationships
+        // Extract people studyAt predicate
         if (quad.subject.termType === 'NamedNode' &&
           quad.predicate.equals(termStudyAt) &&
           quad.object.termType === 'BlankNode') {
           currentStudyAtPerson = quad.subject;
           currentStudyAtNode = quad.object;
         }
-        // 2. Determine the person linked to the relationships
+
+        // Determine the university of the person through
+        // studyAt predicate
         if (currentStudyAtPerson &&
           quad.subject.equals(currentStudyAtNode) &&
           quad.predicate.equals(termhasOrganisation) &&
@@ -262,7 +263,6 @@ export class EnhancerSimilarity {
             quad.predicate.equals(termType)) {
           if (quad.object.equals(termPost)) {
             posts.push(quad.subject);
-            // Emit parameters
             this.parameterEmitterPosts?.emitRow([ quad.subject.value ]);
             postsCreator[quad.subject.value] = [];
           }
@@ -277,7 +277,7 @@ export class EnhancerSimilarity {
           const commentDetails = commentsCreator[quad.subject.value];
           if (postDetails) {
             postDetails.push(quad.object);
-          } else {
+          } else if (commentDetails) {
             commentDetails.push(quad.object);
           }
         }
@@ -299,8 +299,7 @@ export class EnhancerSimilarity {
   public personToActivities(activityToPerson: Record<string, RDF.Term[]>): Record<string, string[]> {
     const personToActivity: Record<string, string[]> = {};
     for (const activity of Object.keys(activityToPerson)) {
-      // The first value is always the creator of the activity, could
-      // probably do with removing the array and just setting directly.
+      // The first value is always the creator of the activity
       const person = activityToPerson[activity][0].value;
       if (!personToActivity[person]) {
         personToActivity[person] = [];
@@ -380,7 +379,8 @@ export class EnhancerSimilarity {
               similarity: similarityPerson,
             },
           );
-          // Some people have no posts
+          
+          // Add similarity of person to posts of other persons
           if (personToPost[pair]) {
             for (const post of personToPost[pair]) {
               similaritiesPosts.push(
