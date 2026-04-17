@@ -379,7 +379,7 @@ export class EnhancerSimilarity {
               similarity: similarityPerson,
             },
           );
-          
+
           // Add similarity of person to posts of other persons
           if (personToPost[pair]) {
             for (const post of personToPost[pair]) {
