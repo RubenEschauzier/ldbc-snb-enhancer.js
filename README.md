@@ -69,12 +69,15 @@ The config file that should be passed to the command line tool has the following
 
 The important parts in this config file are:
 * `"personsPath"`: Path to the persons output file of [LDBC SNB](https://github.com/ldbc/ldbc_snb_datagen).
-* `"destinationPath"`: Path of the destination file to create.
+* `"activitiesPath"`: Path to the activities output file.
+* `"staticPath"`: Path to the static dataset file.
+* `"destinationPathData"`: Path of the destination file to create.
 * `"logger"`: An optional logger for tracking the generation process. (`LoggerStdout` prints to standard output)
 * `"dataSelector"`: A strategy for selecting values from a collection. (`DataSelectorRandom` selects random values based on a given seed)
 * `"handlers"`: An array of enhancement handlers, which are strategies for generating data.
-* `"parameterEmitterPosts""`: An optional parameter emitter for the extracted posts.
-* `"parameterEmitterComments""`: An optional parameter emitter for the extracted comments.
+* `"parameterEmitterPosts"`: An optional parameter emitter for the extracted posts.
+* `"parameterEmitterComments"`: An optional parameter emitter for the extracted comments.
+* `"similarityConfig"`: An optional configuration object to calculate and emit semantic similarities between entities.
 
 ## Configure
 
@@ -351,6 +354,39 @@ Generated shape:
     <http://www.ldbc.eu/ldbc_socialnet/1.0/vocabulary/browserUsed> "Firefox";
     <http://www.ldbc.eu/ldbc_socialnet/1.0/vocabulary/content> "About Rupert Murdoch ... COPY 1";
 ```
+
+### Similarity Configuration
+
+Calculate semantic similarities between people based on their interests and the universities they attend. The enhancer constructs one-hot encoded vectors for each person and computes cosine similarities. It then outputs the highest-ranking similarities for people, posts, and comments directly to parameter emitters.
+```json
+{
+  "similarityConfig": {
+    "parameterEmitterSimilaritiesPeople": {
+      "@type": "ParameterEmitterCsv",
+      "destinationPath": "similarities-people.csv"
+    },
+    "parameterEmitterSimilaritiesPosts": {
+      "@type": "ParameterEmitterCsv",
+      "destinationPath": "similarities-posts.csv"
+    },
+    "parameterEmitterSimilaritiesComments": {
+      "@type": "ParameterEmitterCsv",
+      "destinationPath": "similarities-comments.csv"
+    },
+    "maxSimilarities": 200
+  }
+}
+```
+
+Parameters:
+* `"parameterEmitterSimilaritiesPeople"`: Parameter emitter that outputs the calculated similarities between people.
+* `"parameterEmitterSimilaritiesPosts"`: Parameter emitter that outputs the calculated similarities for posts.
+* `"parameterEmitterSimilaritiesComments"`: Parameter emitter that outputs the calculated similarities for comments.
+* `"maxSimilarities"`: Optional maximum number of top similarities to retain per entity. Defaults to `200`.
+* `"personTransformer"`: Optional transformer to replace IRIs for people before emission.
+
+Output behavior:
+Unlike standard enhancement handlers, the similarity calculation does not append standard RDF data to the destination file. Instead, it emits tabular data (e.g., CSV rows containing the entity IRI and a JSON string of sorted similarities) directly to the configured emitters.
 
 ### Parameter Emitters
 
