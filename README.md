@@ -360,21 +360,26 @@ Generated shape:
 Calculate semantic similarities between people based on their interests and the universities they attend. The enhancer constructs one-hot encoded vectors for each person and computes cosine similarities. It then outputs the highest-ranking similarities for people, posts, and comments directly to parameter emitters.
 ```json
 {
-  "similarityConfig": {
-    "parameterEmitterSimilaritiesPeople": {
-      "@type": "ParameterEmitterCsv",
-      "destinationPath": "similarities-people.csv"
-    },
-    "parameterEmitterSimilaritiesPosts": {
-      "@type": "ParameterEmitterCsv",
-      "destinationPath": "similarities-posts.csv"
-    },
-    "parameterEmitterSimilaritiesComments": {
-      "@type": "ParameterEmitterCsv",
-      "destinationPath": "similarities-comments.csv"
-    },
-    "maxSimilarities": 200
-  }
+  "similarityConfig_personTransformer": {
+    "@type": "TransformerReplaceIri",
+    "searchRegex": "^http://www.ldbc.eu/ldbc_socialnet/1.0/data/pers([0-9]*)$",
+    "replacementString": "http://solidbench-server:3000/pods/$1/profile/card#me"
+  },
+  "similarityConfig_parameterEmitterSimilaritiesPeople": {
+    "@type": "ParameterEmitterCsv",
+    "destinationPath": "out-enhanced/parameters-similarities-people.csv",
+    "separator": ";"
+  },
+  "similarityConfig_parameterEmitterSimilaritiesPosts": {
+    "@type": "ParameterEmitterCsv",
+    "destinationPath": "out-enhanced/parameters-similarities-posts.csv",
+    "separator": ";"
+  },
+  "similarityConfig_parameterEmitterSimilaritiesComments": {
+    "@type": "ParameterEmitterCsv",
+    "destinationPath": "out-enhanced/parameters-similarities-comments.csv",
+    "separator": ";"
+  },
 }
 ```
 
@@ -382,8 +387,8 @@ Parameters:
 * `"parameterEmitterSimilaritiesPeople"`: Parameter emitter that outputs the calculated similarities between people.
 * `"parameterEmitterSimilaritiesPosts"`: Parameter emitter that outputs the calculated similarities for posts.
 * `"parameterEmitterSimilaritiesComments"`: Parameter emitter that outputs the calculated similarities for comments.
-* `"maxSimilarities"`: Optional maximum number of top similarities to retain per entity. Defaults to `200`.
 * `"personTransformer"`: Optional transformer to replace IRIs for people before emission.
+* `"maxSimilarities"`: Optional maximum number of top similarities to retain per entity. Defaults to `200`.
 
 Output behavior:
 Unlike standard enhancement handlers, the similarity calculation does not append standard RDF data to the destination file. Instead, it emits tabular data (e.g., CSV rows containing the entity IRI and a JSON string of sorted similarities) directly to the configured emitters.
