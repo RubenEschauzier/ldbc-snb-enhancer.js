@@ -379,7 +379,7 @@ Calculate semantic similarities between people based on their interests and the 
     "@type": "ParameterEmitterCsv",
     "destinationPath": "out-enhanced/parameters-similarities-comments.csv",
     "separator": ";"
-  },
+  }
 }
 ```
 

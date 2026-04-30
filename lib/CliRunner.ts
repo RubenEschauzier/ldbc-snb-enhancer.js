@@ -14,8 +14,7 @@ export async function runConfig(
 ): Promise<void> {
   const manager = await ComponentsManager.build(properties);
   await manager.configRegistry.register(configPath);
-  const enhancer: Enhancer =
-    await manager.instantiate('urn:ldbc-snb-enhancer:default');
+  const enhancer: Enhancer = await manager.instantiate('urn:ldbc-snb-enhancer:default');
   return await enhancer.generate();
 };
 
