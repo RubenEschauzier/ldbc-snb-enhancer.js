@@ -2,7 +2,6 @@ import type { ReadStream, WriteStream } from 'node:tty';
 import type { IComponentsManagerBuilderOptions } from 'componentsjs';
 import { ComponentsManager } from 'componentsjs';
 import type { Enhancer } from './Enhancer';
-import type { EnhancerSimilarity } from './EnhancerSimilarity';
 
 /**
  * Run function for starting the enhancer for a given config.
@@ -15,7 +14,7 @@ export async function runConfig(
 ): Promise<void> {
   const manager = await ComponentsManager.build(properties);
   await manager.configRegistry.register(configPath);
-  const enhancer: Enhancer | EnhancerSimilarity =
+  const enhancer: Enhancer =
     await manager.instantiate('urn:ldbc-snb-enhancer:default');
   return await enhancer.generate();
 };
