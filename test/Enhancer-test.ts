@@ -4,6 +4,7 @@ import 'jest-rdf';
 import { Enhancer } from '../lib/Enhancer';
 import type { IEnhancementHandler } from '../lib/handlers/IEnhancementHandler';
 import type { IParameterEmitter } from '../lib/parameters/IParameterEmitter';
+import { TransformerReplaceIri } from '../lib/transformers/TransformerReplaceIri';
 import { DataSelectorSequential } from './selector/DataSelectorSequential';
 
 const streamifyString = require('streamify-string');
@@ -32,6 +33,15 @@ jest.mock('node:fs', () => ({
     return writeStream;
   },
 }));
+
+function createEmitter(): IParameterEmitter {
+  return {
+    emitHeader: jest.fn(),
+    emitRow: jest.fn(() => true),
+    flush: jest.fn(),
+    waitForDrain: jest.fn(() => Promise.resolve()),
+  };
+}
 
 describe('Enhancer', () => {
   let enhancer: Enhancer;
@@ -481,6 +491,347 @@ sn:comm00000000000000000003
           'http://www.ldbc.eu/ldbc_socialnet/1.0/data/comm00000000000000000003',
         ]);
         expect(emitterComments.flush).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe('similarity configuration', () => {
+    let emitterSimilarityPeople: IParameterEmitter;
+    let emitterSimilarityPosts: IParameterEmitter;
+    let emitterSimilarityComments: IParameterEmitter;
+
+    beforeEach(() => {
+      emitterSimilarityPeople = createEmitter();
+      emitterSimilarityPosts = createEmitter();
+      emitterSimilarityComments = createEmitter();
+    });
+
+    describe('constructor', () => {
+      it('should emit required and optional headers when similarityConfig is provided', () => {
+        const enhancerSim = new Enhancer({
+          personsPath: 'source-persons.ttl',
+          activitiesPath: 'source-activities.ttl',
+          staticPath: 'source-static.ttl',
+          destinationPathData: 'destination.ttl',
+          dataSelector: new DataSelectorSequential(),
+          similarityConfig: {
+            parameterEmitterSimilaritiesPeople: emitterSimilarityPeople,
+            parameterEmitterSimilaritiesPosts: emitterSimilarityPosts,
+            parameterEmitterSimilaritiesComments: emitterSimilarityComments,
+          },
+        });
+
+        expect(enhancerSim).toBeInstanceOf(Enhancer);
+        expect(emitterSimilarityPeople.emitHeader).toHaveBeenCalledWith([ 'person', 'similarities' ]);
+        expect(emitterSimilarityPosts.emitHeader).toHaveBeenCalledWith([ 'person', 'similarities' ]);
+        expect(emitterSimilarityComments.emitHeader).toHaveBeenCalledWith([ 'person', 'similarities' ]);
+      });
+    });
+
+    it('should orchestrate similarity calculations when similarityConfig is provided', async() => {
+      const logger = { log: jest.fn() };
+      const emitterPeople = createEmitter();
+      const emitterPosts = createEmitter();
+      const emitterComments = createEmitter();
+
+      enhancer = new Enhancer({
+        personsPath: 'source-persons.ttl',
+        activitiesPath: 'source-activities.ttl',
+        staticPath: 'source-static.ttl',
+        destinationPathData: 'destination.ttl',
+        dataSelector: new DataSelectorSequential(),
+        logger,
+        similarityConfig: {
+          parameterEmitterSimilaritiesPeople: emitterPeople,
+          parameterEmitterSimilaritiesPosts: emitterPosts,
+          parameterEmitterSimilaritiesComments: emitterComments,
+        },
+      });
+
+      // Spy on the methods to verify they are called during generate()
+      const personToActivitiesSpy = jest.spyOn(enhancer, 'personToActivities');
+      const interestsToVectorSpy = jest.spyOn(enhancer, 'interestsToVector');
+
+      // We mock the implementation of peopleSimilarities here so we are only
+      // testing the orchestration block, not re-running the heavy N^2 math
+      const peopleSimilaritiesSpy = jest.spyOn(enhancer, 'peopleSimilarities').mockResolvedValue();
+
+      await enhancer.generate();
+
+      // 1. Verify the logger was hit
+      expect(logger.log).toHaveBeenCalledWith('Calculating similarities');
+
+      // 2. Verify the data formatting methods were called
+      expect(personToActivitiesSpy).toHaveBeenCalledTimes(2);
+      expect(interestsToVectorSpy).toHaveBeenCalledTimes(1);
+
+      // 3. Verify the final orchestration method was called with the assembled objects
+      expect(peopleSimilaritiesSpy).toHaveBeenCalledTimes(1);
+      expect(peopleSimilaritiesSpy).toHaveBeenCalledWith(
+        expect.any(Object), // PeopleSemanticVectors
+        expect.any(Object), // PersonToPost
+        expect.any(Object), // PersonToComment
+      );
+    });
+
+    describe('helper methods', () => {
+      let enhancerSim: Enhancer;
+      beforeEach(() => {
+        enhancerSim = new Enhancer({
+          personsPath: 'source-persons.ttl',
+          activitiesPath: 'source-activities.ttl',
+          staticPath: 'source-static.ttl',
+          destinationPathData: 'destination.ttl',
+          dataSelector: new DataSelectorSequential(),
+          similarityConfig: {
+            parameterEmitterSimilaritiesPeople: emitterSimilarityPeople,
+            parameterEmitterSimilaritiesPosts: emitterSimilarityPosts,
+            parameterEmitterSimilaritiesComments: emitterSimilarityComments,
+            maxSimilarities: 2,
+          },
+        });
+      });
+
+      it('personToActivities should invert activity creators safely', () => {
+        expect(
+          enhancerSim.personToActivities({
+            'post:a': [ DF.namedNode('person:1') ],
+            'post:b': [ DF.namedNode('person:1') ],
+            'post:c': [ DF.namedNode('person:2') ],
+            'post:empty': [],
+          }),
+        ).toEqual({
+          'person:1': [ 'post:a', 'post:b' ],
+          'person:2': [ 'post:c' ],
+        });
+      });
+
+      it('interestsToVector should map interests and universities', () => {
+        const peopleSemanticVectors = enhancerSim.interestsToVector(
+          {
+            person1: [
+              DF.namedNode('interest:1'),
+              DF.namedNode('interest:2'),
+            ],
+            person2: [
+              DF.namedNode('interest:2'),
+            ],
+          },
+          {
+            person1: [
+              DF.namedNode('university:1'),
+            ],
+          },
+          [
+            DF.namedNode('interest:1'),
+            DF.namedNode('interest:2'),
+          ],
+          [
+            DF.namedNode('university:1'),
+            DF.namedNode('university:2'),
+          ],
+        );
+
+        expect(peopleSemanticVectors).toEqual({
+          person1: [ 1, 1, 1, 0 ],
+          person2: [ 0, 1, 0, 0 ],
+        });
+      });
+
+      it('cosineSimilarity should calculate similarity', () => {
+        expect(enhancerSim.cosineSimilarity([ 1, 1 ], [ 1, 1 ])).toBeCloseTo(1);
+        expect(enhancerSim.cosineSimilarity([ 1, 0 ], [ 0, 1 ])).toBe(0);
+      });
+
+      it('sortAndTruncateSimilarities should sort and truncate to config max', () => {
+        const entries = [
+          { entity: 'a', similarity: 0.2 },
+          { entity: 'b', similarity: 0.9 },
+          { entity: 'c', similarity: 0.7 },
+        ];
+
+        expect(enhancerSim.sortAndTruncateSimilarities(entries)).toEqual([
+          { entity: 'b', similarity: 0.9 },
+          { entity: 'c', similarity: 0.7 },
+        ]);
+      });
+    });
+
+    describe('peopleSimilarities', () => {
+      let enhancerSim: Enhancer;
+
+      it('should emit sorted similarities with transformer and truncate by maxSimilarities', async() => {
+        const stdoutSpy = jest.spyOn(process.stdout, 'write').mockReturnValue(true);
+        const personTransformer = new TransformerReplaceIri('^', 'transformed:');
+        const transformSpy = jest.spyOn(personTransformer, 'transformTerm');
+
+        enhancerSim = new Enhancer({
+          personsPath: 'source-persons.ttl',
+          activitiesPath: 'source-activities.ttl',
+          staticPath: 'source-static.ttl',
+          destinationPathData: 'destination.ttl',
+          dataSelector: new DataSelectorSequential(),
+          similarityConfig: {
+            maxSimilarities: 1,
+            personTransformer,
+            parameterEmitterSimilaritiesPeople: emitterSimilarityPeople,
+            parameterEmitterSimilaritiesPosts: emitterSimilarityPosts,
+            parameterEmitterSimilaritiesComments: emitterSimilarityComments,
+          },
+        });
+
+        await enhancerSim.peopleSimilarities(
+          {
+            person1: [ 1, 0 ],
+            person2: [ 1, 0 ],
+            person3: [ 0, 1 ],
+          },
+          {
+            person2: [ 'post2' ],
+            person3: [ 'post3' ],
+          },
+          {
+            person2: [ 'comment2' ],
+            person3: [ 'comment3' ],
+          },
+        );
+
+        expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining('Similarities calculated: 0'));
+        expect(transformSpy).toHaveBeenCalledWith('person1');
+        expect(transformSpy).toHaveBeenCalledWith('person2');
+
+        expect(emitterSimilarityPeople.emitRow).toHaveBeenCalledTimes(3);
+        expect(emitterSimilarityPosts.emitRow).toHaveBeenCalledTimes(3);
+        expect(emitterSimilarityComments.emitRow).toHaveBeenCalledTimes(3);
+
+        const similaritiesPeopleJson = (<jest.Mock> emitterSimilarityPeople.emitRow).mock.calls[0][0][1];
+        const similaritiesPostsJson = (<jest.Mock> emitterSimilarityPosts.emitRow).mock.calls[0][0][1];
+        const similaritiesCommentsJson = (<jest.Mock> emitterSimilarityComments.emitRow).mock.calls[0][0][1];
+
+        expect(JSON.parse(similaritiesPeopleJson)).toHaveLength(1);
+        expect(JSON.parse(similaritiesPostsJson)).toHaveLength(1);
+        expect(JSON.parse(similaritiesCommentsJson)).toHaveLength(1);
+
+        expect(emitterSimilarityPeople.flush).toHaveBeenCalledTimes(1);
+        expect(emitterSimilarityPosts.flush).toHaveBeenCalledTimes(1);
+        expect(emitterSimilarityComments.flush).toHaveBeenCalledTimes(1);
+
+        stdoutSpy.mockRestore();
+      });
+
+      it('should handle a single person without transformer', async() => {
+        enhancerSim = new Enhancer({
+          personsPath: 'source-persons.ttl',
+          activitiesPath: 'source-activities.ttl',
+          staticPath: 'source-static.ttl',
+          destinationPathData: 'destination.ttl',
+          dataSelector: new DataSelectorSequential(),
+          similarityConfig: {
+            parameterEmitterSimilaritiesPeople: emitterSimilarityPeople,
+            parameterEmitterSimilaritiesPosts: emitterSimilarityPosts,
+            parameterEmitterSimilaritiesComments: emitterSimilarityComments,
+          },
+        });
+
+        await enhancerSim.peopleSimilarities(
+          {
+            person1: [ 1, 0 ],
+          },
+          {},
+          {},
+        );
+
+        expect(emitterSimilarityPeople.emitRow).toHaveBeenCalledWith([ 'person1', '[]' ]);
+        expect(emitterSimilarityPosts.emitRow).toHaveBeenCalledWith([ 'person1', '[]' ]);
+        expect(emitterSimilarityComments.emitRow).toHaveBeenCalledWith([ 'person1', '[]' ]);
+      });
+    });
+
+    describe('data extraction', () => {
+      let enhancerSim: Enhancer;
+      beforeEach(async() => {
+        enhancerSim = new Enhancer({
+          personsPath: 'source-persons.ttl',
+          activitiesPath: 'source-activities.ttl',
+          staticPath: 'source-static.ttl',
+          destinationPathData: 'destination.ttl',
+          dataSelector: new DataSelectorSequential(),
+          similarityConfig: {
+            parameterEmitterSimilaritiesPeople: emitterSimilarityPeople,
+            parameterEmitterSimilaritiesPosts: emitterSimilarityPosts,
+            parameterEmitterSimilaritiesComments: emitterSimilarityComments,
+          },
+        });
+        await (<any> enhancerSim).rdfObjectLoader.context;
+      });
+
+      it('extractPeople should combine standard and similarity extractions', async() => {
+        files['source-persons.ttl'] = `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix snvoc: <http://www.ldbc.eu/ldbc_socialnet/1.0/vocabulary/> .
+@prefix sn: <http://www.ldbc.eu/ldbc_socialnet/1.0/data/> .
+sn:person1 rdf:type snvoc:Person ;
+  snvoc:isLocatedIn sn:city1 ;
+  snvoc:knows _:knows1 ;
+  snvoc:hasInterest sn:interest1 ;
+  snvoc:studyAt _:study1 .
+_:study1 snvoc:hasOrganisation sn:university1 .
+_:knows1 snvoc:hasPerson sn:person2 .
+sn:person2 rdf:type snvoc:Person ;
+  snvoc:hasInterest sn:interest2 .
+sn:other rdf:type snvoc:OtherClass .`;
+
+        const data = await enhancerSim.extractPeople();
+
+        expect(data.people).toEqualRdfTermArray([
+          DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/person1'),
+          DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/person2'),
+        ]);
+        expect(data.peopleLocatedInCities).toMatchObject({
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/person1': DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/city1'),
+        });
+        expect(data.peopleKnows).toMatchObject({
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/person1': [
+            DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/person2'),
+          ],
+        });
+        expect(data.interests).toEqualRdfTermArray([
+          DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/interest1'),
+          DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/interest2'),
+        ]);
+        expect(data.universities).toEqualRdfTermArray([
+          DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/university1'),
+        ]);
+        expect(data.peopleHasInterest).toMatchObject({
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/person1': [
+            DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/interest1'),
+          ],
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/person2': [
+            DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/interest2'),
+          ],
+        });
+      });
+
+      it('extractActivities should track creator mappings', async() => {
+        files['source-activities.ttl'] = `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix snvoc: <http://www.ldbc.eu/ldbc_socialnet/1.0/vocabulary/> .
+@prefix sn: <http://www.ldbc.eu/ldbc_socialnet/1.0/data/> .
+sn:post1 rdf:type snvoc:Post .
+sn:post1 snvoc:hasCreator sn:person1 .
+sn:comment1 rdf:type snvoc:Comment .
+sn:comment1 snvoc:hasCreator sn:person2 .`;
+
+        const data = await enhancerSim.extractActivities();
+
+        expect(data.postsCreator).toMatchObject({
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/post1': [
+            DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/person1'),
+          ],
+        });
+        expect(data.commentsCreator).toMatchObject({
+          'http://www.ldbc.eu/ldbc_socialnet/1.0/data/comment1': [
+            DF.namedNode('http://www.ldbc.eu/ldbc_socialnet/1.0/data/person2'),
+          ],
+        });
       });
     });
   });
