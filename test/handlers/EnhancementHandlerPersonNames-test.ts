@@ -146,6 +146,7 @@ describe('EnhancementHandlerPersonNames', () => {
       emitter = {
         emitHeader: jest.fn(),
         emitRow: jest.fn(),
+        waitForDrain: jest.fn(),
         flush: jest.fn(),
       };
       handler = new EnhancementHandlerPersonNames(0.5, emitter);
