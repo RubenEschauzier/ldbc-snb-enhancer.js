@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.7.0"></a>
+## [v2.7.0](https://github.com/SolidBench/ldbc-snb-enhancer.js/compare/v2.6.0...v2.7.0) - 2026-05-04
+
+### Added
+* [Add similarity calculation of person to other persons and their posts and comments (#21)](https://github.com/SolidBench/ldbc-snb-enhancer.js/commit/e91f4fde391892fd57d87251d7793ff25e67a7af)
+
 <a name="v2.6.0"></a>
 ## [v2.6.0](https://github.com/SolidBench/ldbc-snb-enhancer.js/compare/v2.5.2...v2.6.0) - 2025-04-18
 
