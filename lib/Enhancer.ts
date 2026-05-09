@@ -530,6 +530,7 @@ export interface IEntitySimilarity {
   similarity: number;
 }
 
+// Avoids Components.js generator flattening the params of this config, to allow this config to be optional.
 export class SimilarityConfig implements ISimilarityConfig {
   public constructor(
     public parameterEmitterSimilaritiesPeople: IParameterEmitter,
