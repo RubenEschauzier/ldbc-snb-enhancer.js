@@ -530,6 +530,16 @@ export interface IEntitySimilarity {
   similarity: number;
 }
 
+export class SimilarityConfig implements ISimilarityConfig {
+  public constructor(
+    public parameterEmitterSimilaritiesPeople: IParameterEmitter,
+    public parameterEmitterSimilaritiesPosts: IParameterEmitter,
+    public parameterEmitterSimilaritiesComments: IParameterEmitter,
+    public maxSimilarities?: number,
+    public personTransformer?: TransformerReplaceIri,
+  ) {}
+}
+
 export interface ISimilarityConfig {
   /**
    * Parameter emitter that emits the calculated similarities for people
@@ -596,5 +606,5 @@ export interface IEnhancerOptions {
    * output similarities for persons to other entities in the
    * ldbc-snb data.
    */
-  similarityConfig?: ISimilarityConfig;
+  similarityConfig?: SimilarityConfig;
 }
